@@ -1,5 +1,6 @@
 from datetime import datetime
+import time
 
-def to_unix(date_str: str) -> int:
-    dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-    return int(dt.timestamp())
+def convert_to_unix(date_string: str) -> int:
+    dt = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    return int(time.mktime(dt.timetuple()))

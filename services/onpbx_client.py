@@ -1,54 +1,25 @@
-import httpx
-from schemas.request import CallDownloadRequest
-from utils.time_utils import to_unix
+import requests
+from utils.env import ONPBX_DOMAIN, ONPBX_API_KEY
 
-BASE_URL = "https://api2.onlinepbx.ru"
+def fetch_download_url(start: int, end: int) -> str:
+    # Step 1: Get temporary auth key
+    auth_url = f"https://api2.onlinepbx.ru/{ONPBX_DOMAIN}/auth.json"
+    auth_payload = {"auth_key": ONPBX_API_KEY}
+    auth_response = requests.post(auth_url, data=auth_payload)
+    auth_response.raise_for_status()
+    data = auth_response.json()["data"]
+    xpbx_key = f"{data['key_id']}:{data['key']}"
 
-async def get_token(domain: str, api_key: str) -> str:
-    auth_url = f"{BASE_URL}/{domain}/auth.json"
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-    }
-    data = {"auth_key": api_key}
-
-    async with httpx.AsyncClient() as client:
-        r = await client.post(auth_url, data=data, headers=headers)
-        r.raise_for_status()
-        json = r.json()
-        key_id = json["data"]["key_id"]
-        key = json["data"]["key"]
-        return f"{key_id}:{key}"
-
-async def fetch_download_url(req: CallDownloadRequest) -> str:
-    token = await get_token(req.domain, req.api_key)
-
-    start_ts = to_unix(req.start_date)
-    end_ts = to_unix(req.end_date)
-
-    # Enforce 1 week limit (604800 seconds)
-    if end_ts - start_ts > 604800:
-        raise Exception("Max allowed interval is 7 days")
-
-    body = {
-        "start_stamp_from": str(start_ts),
-        "start_stamp_to": str(end_ts),
-        "download": "1",
+    # Step 2: Request download link for call history
+    url = f"https://api2.onlinepbx.ru/{ONPBX_DOMAIN}/mongo_history/search.json"
+    headers = {"x-pbx-authentication": xpbx_key}
+    payload = {
+        "start_stamp_from": str(start),
+        "start_stamp_to": str(end),
+        "download": "1"
     }
 
-    headers = {
-        "x-pbx-authentication": token,
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
+    response = requests.post(url, data=payload, headers=headers)
+    response.raise_for_status()
 
-    search_url = f"{BASE_URL}/{req.domain}/mongo_history/search.json"
-
-    async with httpx.AsyncClient() as client:
-        r = await client.post(search_url, data=body, headers=headers)
-        r.raise_for_status()
-        json = r.json()
-
-        if "data" not in json or "url" not in json["data"]:
-            raise Exception("No download URL found")
-
-        return json["data"]["url"]
+    return response.json()["data"]
