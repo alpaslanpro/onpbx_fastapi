@@ -1,0 +1,10 @@
+@"
+venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+*.log
+*.sqlite3
+.DS_Store
+"@ > .gitignore
